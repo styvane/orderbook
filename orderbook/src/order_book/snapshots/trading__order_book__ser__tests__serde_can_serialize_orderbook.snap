@@ -1,0 +1,13 @@
+---
+source: orderbook/src/order_book/ser.rs
+expression: "&order_book"
+---
+{
+  "kind": "Ask",
+  "books": {
+    "Bitstamp": {
+      "price": "2.1",
+      "amount": "0.4"
+    }
+  }
+}
