@@ -18,9 +18,12 @@ pub struct OrderBook {
 
 /// The [`Book`] type represents a book in an [order book](OrderBook).
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all(serialize = "snake_case"))]
 pub struct Book {
     price: Decimal,
     amount: Decimal,
+    #[serde(skip_deserializing)]
+    pub(super) exchange: Option<Exchange>,
 }
 
 impl PartialOrd for Book {
@@ -40,6 +43,7 @@ impl Ord for Book {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 pub enum Exchange {
     Binance,
     Bitstamp,
@@ -47,15 +51,25 @@ pub enum Exchange {
 
 /// The [`BookKind`] type is the different kind of books in an order book.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 pub enum BookKind {
-    Ask,
-    Bid,
+    Asks,
+    Bids,
 }
 
 impl Book {
     /// Creates new book with the specified price and amount.
     pub fn new(price: Decimal, amount: Decimal) -> Self {
-        Book { price, amount }
+        Book {
+            price,
+            amount,
+            exchange: None,
+        }
+    }
+
+    /// Set the exchange value to the specified value.
+    pub fn set_exchange(&mut self, which: Exchange) {
+        self.exchange = Some(which);
     }
 }
 
@@ -88,7 +102,7 @@ impl OrderBook {
     ///
     /// use orderbook::prelude::*;
     ///
-    /// let mut order_book = OrderBook::with_capacity(BookKind::Ask, 1);
+    /// let mut order_book = OrderBook::with_capacity(BookKind::Asks, 1);
     /// let book = Book::new(dec!(2.1), dec!(0.4));
     /// order_book.push(Exchange::Bitstamp, book);
     /// assert_eq!(order_book.len(), 1);
@@ -107,7 +121,7 @@ impl OrderBook {
     ///
     /// use orderbook::prelude::*;
     ///
-    /// let mut order_book = OrderBook::with_capacity(BookKind::Bid, 1);
+    /// let mut order_book = OrderBook::with_capacity(BookKind::Bids, 1);
     /// order_book.push(Exchange::Binance, Book::new(dec!(1.9), dec!(3.7)));
     /// order_book.push(Exchange::Bitstamp, Book::new(dec!(2.5), dec!(4.1)));
     /// let value = Some((Exchange::Binance, Book::new(dec!(1.9), dec!(3.7))));

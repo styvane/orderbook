@@ -3,11 +3,16 @@ source: orderbook/src/order_book/ser.rs
 expression: "&order_book"
 ---
 {
-  "kind": "Ask",
-  "books": {
-    "Bitstamp": {
+  "asks": [
+    {
+      "price": "3.1",
+      "amount": "0.1",
+      "exchange": "binance"
+    },
+    {
       "price": "2.1",
-      "amount": "0.4"
+      "amount": "0.4",
+      "exchange": "bitstamp"
     }
-  }
+  ]
 }
