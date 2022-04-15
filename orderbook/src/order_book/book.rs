@@ -4,9 +4,14 @@
 
 use std::cmp::Ordering;
 
+use anyhow::Context;
 use priority_queue::DoublePriorityQueue;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+
+use crate::integrator::event::Event;
+use crate::prelude::{Error, Exchange};
 
 /// The [`OrderBook`] type. the [See module level documentation](self).
 #[derive(Debug)]
@@ -42,13 +47,6 @@ impl Ord for Book {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
-pub enum Exchange {
-    Binance,
-    Bitstamp,
-}
-
 /// The [`BookKind`] type is the different kind of books in an order book.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all(serialize = "snake_case"))]
@@ -70,6 +68,27 @@ impl Book {
     /// Set the exchange value to the specified value.
     pub fn set_exchange(&mut self, which: Exchange) {
         self.exchange = Some(which);
+    }
+
+    /// Publishes books to a channel.
+    #[tracing::instrument(name = "Publishes books to a channel", skip(sender, messages))]
+    pub async fn publish(
+        sender: mpsc::Sender<Self>,
+        messages: Result<tungstenite::Message, tungstenite::Error>,
+    ) -> Result<(), Error> {
+        let messages = messages?;
+        let data = match serde_json::from_str::<Event>(&messages.into_text()?)? {
+            Event::Binance(event) => event,
+            Event::Bitstamp { data } => data,
+        };
+
+        for (price, amount) in data.bids {
+            sender
+                .send(Book::new(price, amount))
+                .await
+                .context("failed to send book")?;
+        }
+        Ok(())
     }
 }
 
@@ -142,5 +161,53 @@ impl OrderBook {
     /// Returns `true` if the book order has a lenght of 0.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Book;
+    use crate::telemetry::tests::force_lazy;
+    use fake;
+    use tokio::sync::mpsc::channel;
+    use tungstenite::Message;
+
+    fn generate_message_data(ask: &str, bid: &str) -> String {
+        force_lazy();
+        let gen = || -> Vec<(String, String)> {
+            fake::vec![f64; 10]
+                .iter()
+                .map(ToString::to_string)
+                .zip(fake::vec![f64; 10].iter().map(ToString::to_string))
+                .collect()
+        };
+
+        serde_json::json!({
+            ask: gen(),
+            bid: gen(),
+        })
+        .to_string()
+    }
+
+    #[tokio::test]
+    async fn publish_binance_successfully() {
+        let data = generate_message_data("a", "b");
+        let (tx, _rx) = channel(10);
+        let result = Ok(Message::Text(data));
+        assert!(
+            Book::publish(tx, result).await.is_ok(),
+            "failed to publish books"
+        )
+    }
+
+    #[tokio::test]
+    async fn publish_bitstamp_successfully() {
+        let data = generate_message_data("asks", "bids");
+        let (tx, _rx) = channel(10);
+        let result = Ok(Message::Text(data));
+        assert!(
+            Book::publish(tx, result).await.is_ok(),
+            "failed to publish books"
+        )
     }
 }

@@ -1,3 +1,4 @@
 mod binance;
-mod event_data;
-pub mod transport;
+mod bitstamp;
+pub(crate) mod event;
+mod transport;

@@ -2,73 +2,45 @@
 //!
 //! This module implements the integration with Binance.
 
-use anyhow::Context;
 use async_trait::async_trait;
-use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::Sender;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use futures_util::SinkExt;
+use tokio_tungstenite::connect_async;
 use tungstenite::Message;
 
-use super::event_data::EventText;
 use super::transport::WebSocketTransport;
+use super::transport::{StopSender, WebSocketStream};
 use crate::error::Error;
-use crate::order_book::Book;
-
 pub struct Binance {
     address: String,
-    socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
+    socket: WebSocketStream,
+    send_on_stop: StopSender,
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub enum Event {
-    Subscribe { result: Option<String>, id: usize },
-    OrderBook(EventText),
+impl Binance {
+    /// Opens a co nnection to an exchange.
+    async fn connect(&mut self) -> Result<(), Error> {
+        let (socket, _) = connect_async(&self.address).await.map_err(Error::WsError)?;
+        self.socket = Box::pin(socket) as WebSocketStream;
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl WebSocketTransport for Binance {
-    /// Opens a connection to an exchange.
-    async fn connect(&mut self) -> Result<(), Error> {
-        let (socket, _) = connect_async(&self.address).await.map_err(Error::WsError)?;
-        self.socket = socket;
-        Ok(())
-    }
-    async fn subscribe(&mut self, channel: &str) -> Result<(), Error> {
+    async fn subscribe(&mut self, currency_pair: &str) -> Result<(), Error> {
         self.socket
             .send(Message::Text(
                 serde_json::json!({
-                    "event": "bts:subscribe",
-                    "data": {
-                        "channel": format!("order_book_{channel}")
-                    }
+                    "method": "SUBSCRIBE",
+                    "params": [format!("{currency_pair}@depth")],
+                    "id": 1
                 })
                 .to_string(),
             ))
             .await?;
         Ok(())
     }
-    async fn watch(&mut self, sender: Sender<Book>) -> Result<(), Error> {
-        while let Some(message) = self.socket.next().await {
-            let message = message?;
-            let event: Event = serde_json::from_str(&message.into_text()?)?;
-            match event {
-                Event::OrderBook(event) => {
-                    for (price, amount) in event.bids {
-                        sender
-                            .send(Book::new(price, amount))
-                            .await
-                            .context("failed to send book")?;
-                    }
-                }
-                Event::Subscribe { .. } => {
-                    todo!()
-                }
-            }
-        }
 
-        Ok(())
-    }
     async fn unsubscribe(&self) -> Result<(), Error> {
         Ok(())
     }
