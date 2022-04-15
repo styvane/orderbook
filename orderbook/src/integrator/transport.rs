@@ -46,7 +46,7 @@ pub trait WebSocketTransport {
     /// Subscribes to a channel.
     /// This method should only be called when a connection was previously
     /// successfully established.
-    async fn subscribe(&mut self, channel: &str) -> Result<(), Error>;
+    async fn subscribe(&mut self, message: Message) -> Result<(), Error>;
 
     /// Unsubscribes from a channel.
     async fn unsubscribe(&self) -> Result<(), Error>;
