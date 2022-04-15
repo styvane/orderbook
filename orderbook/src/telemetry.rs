@@ -9,21 +9,22 @@ use tracing_subscriber::{EnvFilter, Registry};
 
 pub struct Tracer<'s> {
     name: &'s str,
-    level_filter: &'s str,
+    env_filter: &'s str,
 }
 
 impl<'s> Tracer<'s> {
-    pub fn new(name: &'s str, level_filter: &'s str) -> Self {
-        Self { name, level_filter }
+    pub fn new(name: &'s str, env_filter: &'s str) -> Self {
+        Self { name, env_filter }
     }
 
+    /// Initializes tracer.
     pub fn init<Sink>(&self, sink: Sink)
     where
         Sink: for<'w> MakeWriter<'w> + Send + Sync + 'static,
     {
         let formatting_layer = BunyanFormattingLayer::new(self.name.into(), sink);
         let filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(self.level_filter));
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(self.env_filter));
 
         let subscriber = Registry::default()
             .with(filter)

@@ -10,7 +10,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::integrator::event::Event;
+use crate::integration::event::Event;
 use crate::prelude::{Error, Exchange};
 
 /// The [`OrderBook`] type. the [See module level documentation](self).
