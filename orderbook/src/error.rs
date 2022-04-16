@@ -10,5 +10,8 @@ pub enum Error {
     ParseError(#[from] serde_json::Error),
 
     #[error(transparent)]
+    ConfigError(#[from] config::ConfigError),
+
+    #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
 }

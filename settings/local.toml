@@ -1,0 +1,13 @@
+[[exchanges]]
+exchange = "binance"
+channel = "btcusdt"
+url = "wss://stream.binance.com:9443/ws"
+
+
+[[exchanges]]
+exchange = "bitstamp"
+channel = "btcusd"
+url = "wss://ws.bitstamp.net"
+
+
+

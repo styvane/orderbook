@@ -65,6 +65,15 @@ impl Book {
         }
     }
 
+    /// Creates new book with the specified price and amount and exchange.
+    pub fn with_exchange(price: Decimal, amount: Decimal, exchange: &Exchange) -> Self {
+        Book {
+            price,
+            amount,
+            exchange: Some(exchange.clone()),
+        }
+    }
+
     /// Set the exchange value to the specified value.
     pub fn set_exchange(&mut self, which: Exchange) {
         self.exchange = Some(which);
@@ -77,16 +86,21 @@ impl Book {
         messages: Result<tungstenite::Message, tungstenite::Error>,
     ) -> Result<(), Error> {
         let messages = messages?;
+        let exchange: Exchange;
         let data = match serde_json::from_str::<Event>(&messages.into_text()?)? {
-            Event::Binance(event) => event,
-            Event::Bitstamp { data } => data,
+            Event::Binance(event) => {
+                exchange = Exchange::Binance;
+                event
+            }
+            Event::Bitstamp { data } => {
+                exchange = Exchange::Bitstamp;
+                data
+            }
         };
 
         for (price, amount) in data.bids {
-            sender
-                .send(Book::new(price, amount))
-                .await
-                .context("failed to send book")?;
+            let book = Book::with_exchange(price, amount, &exchange);
+            sender.send(book).await.context("failed to send book")?;
         }
         Ok(())
     }
@@ -161,6 +175,20 @@ impl OrderBook {
     /// Returns `true` if the book order has a lenght of 0.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Returns the top n books.
+    pub fn take(&self, n: usize) -> Vec<Book> {
+        self.books
+            .clone()
+            .into_sorted_iter()
+            .rev()
+            .take(n)
+            .map(|(e, mut b)| {
+                b.exchange = Some(e);
+                b
+            })
+            .collect::<Vec<_>>()
     }
 }
 

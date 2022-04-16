@@ -15,10 +15,11 @@ use crate::prelude::Error;
 /// Configuration type.
 #[derive(Debug, Deserialize)]
 pub struct Configuration {
+    pub result_size: usize,
     pub exchanges: Vec<ExchangeConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ExchangeConfig {
     pub exchange: String,
     pub channel: String,
@@ -26,7 +27,7 @@ pub struct ExchangeConfig {
     pub credential: Option<Credential>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Credential {
     pub user_id: Secret<String>,
     pub token: Secret<String>,
@@ -91,7 +92,7 @@ impl Configuration {
         let config = builder
             .build()
             .and_then(Config::try_deserialize)
-            .context("failed to deserialize configuration")?;
+            .map_err(Error::ConfigError)?;
 
         Ok(config)
     }
