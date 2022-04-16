@@ -27,7 +27,7 @@ tokio-stream = "0.1.8"
 [dependencies.tokio]
 version = "1.17.0"
 default-features = false
-features = ["rt", "macros", "sync", "net", "time"]
+features = ["rt", "macros", "sync", "net"]
 
 [dev-dependencies]
 insta = "1.13.0"

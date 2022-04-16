@@ -33,7 +33,7 @@ impl ApiService {
     }
 
     /// Opens a connection to an exchange.
-    #[tracing::instrument(name = "Connect to websocket", skip(self))]
+    #[tracing::instrument(name = "Connect to websocket", skip(self, config))]
     pub async fn connect(&mut self, config: &ExchangeConfig) -> Result<()> {
         let (socket, _) = connect_async(&config.url).await.map_err(Error::WsError)?;
         let socket = Box::pin(socket) as WebSocketStream;
@@ -44,7 +44,7 @@ impl ApiService {
         Ok(())
     }
 
-    #[tracing::instrument(name = "Watch list of socket stream", skip(self, book_sender))]
+    #[tracing::instrument(name = "Watch list of socket stream", skip(self, book_sender, stop))]
     pub async fn watch(
         &mut self,
         book_sender: mpsc::Sender<(BookKind, Book)>,
@@ -58,6 +58,7 @@ impl ApiService {
             tokio::select! {
                 Some(message) = fut.next() => {
                     tokio::spawn(Book::publish(book_sender.clone(), message));
+
                 },
                 _ = (&mut stop) => break
 
@@ -74,7 +75,7 @@ pub struct ExchangeService {
 
 #[async_trait]
 impl WebSocketTransport for ExchangeService {
-    #[tracing::instrument(name = "Subscribe to channel", skip(self))]
+    #[tracing::instrument(name = "Subscribe to channel", skip(self, message))]
     async fn subscribe(&mut self, message: Message) -> Result<()> {
         self.socket.as_mut().unwrap().send(message).await?;
         Ok(())

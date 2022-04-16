@@ -25,13 +25,14 @@ impl OrderBook for SummaryServer {
             run_until_stopped(book_tx, stop_rx).await;
         });
         tokio::spawn(async move {
-            fill(tx, book_rx, RESULT_SIZE).await;
+            push_books(tx, book_rx, RESULT_SIZE).await;
         });
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 
-async fn fill(
+#[tracing::instrument(name = "Pushes book to the queue", skip(summary, books, size))]
+async fn push_books(
     summary: mpsc::Sender<Result<Summary, Status>>,
     mut books: mpsc::Receiver<(BookKind, Book)>,
     size: usize,
@@ -46,7 +47,7 @@ async fn fill(
             BookKind::Bids => bid_book.push(exchange, book),
         };
 
-        let spread = 0;
+        let spread = ask_book.max_price() - bid_book.max_price();
 
         if let Err(e) = summary
             .send(Ok(Summary {

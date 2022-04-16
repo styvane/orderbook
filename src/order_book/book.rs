@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::integration::event::Event;
+use crate::integration::event::{Event, EventData};
 use crate::prelude::{Error, Exchange};
 
 tonic::include_proto!("orderbook");
@@ -72,7 +72,8 @@ impl Book {
     ) -> Result<(), Error> {
         let messages = messages?;
         let exchange: Exchange;
-        let data = match serde_json::from_str::<Event>(&messages.into_text()?)? {
+        let EventData { bids, asks } = match serde_json::from_str::<Event>(&messages.into_text()?)?
+        {
             Event::Binance(event) => {
                 exchange = Exchange::Binance;
                 event
@@ -83,19 +84,26 @@ impl Book {
             }
         };
 
-        for (price, amount) in data.bids {
-            let book = Book::new(&price, &amount, exchange.as_ref());
-            if let Err(e) = book_sender.send((BookKind::Bids, book)).await {
-                tracing::error!("failed to publish book: {}", e);
-            }
-        }
+        let bid_sender = book_sender.clone();
+        let bid_exchange = exchange.clone();
 
-        for (price, amount) in data.asks {
-            let book = Book::new(&price, &amount, exchange.as_ref());
-            if let Err(e) = book_sender.send((BookKind::Asks, book)).await {
-                tracing::error!("failed to publish book: {}", e);
+        tokio::spawn(async move {
+            for (price, amount) in bids {
+                let book = Book::new(&price, &amount, bid_exchange.as_ref());
+                if let Err(e) = bid_sender.send((BookKind::Bids, book)).await {
+                    tracing::error!("failed to publish book: {}", e);
+                }
             }
-        }
+        });
+
+        tokio::spawn(async move {
+            for (price, amount) in asks {
+                let book = Book::new(&price, &amount, exchange.as_ref());
+                if let Err(e) = book_sender.send((BookKind::Asks, book)).await {
+                    tracing::error!("failed to publish book: {}", e);
+                }
+            }
+        });
 
         Ok(())
     }
@@ -176,6 +184,14 @@ impl BookQueue {
             .take(n)
             .map(|(_, b)| b)
             .collect::<Vec<_>>()
+    }
+
+    /// Returns the max price.
+    pub fn max_price(&self) -> Decimal {
+        self.books
+            .peek_max()
+            .map(|(_, b)| b.price.parse::<Decimal>().unwrap_or_default())
+            .unwrap()
     }
 }
 
