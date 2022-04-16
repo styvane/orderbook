@@ -5,14 +5,14 @@ expression: "&order_book"
 {
   "asks": [
     {
+      "exchange": "binance",
       "price": "3.1",
-      "amount": "0.1",
-      "exchange": "binance"
+      "amount": "0.1"
     },
     {
+      "exchange": "bitstamp",
       "price": "2.1",
-      "amount": "0.4",
-      "exchange": "bitstamp"
+      "amount": "0.4"
     }
   ]
 }

@@ -12,7 +12,7 @@ use tungstenite::Message;
 use super::transport::WebSocketTransport;
 use super::transport::{StopSender, WebSocketStream};
 use crate::configuration::ExchangeConfig;
-use crate::prelude::{Book, Error, Exchange, Result};
+use crate::prelude::{Book, BookKind, Error, Exchange, Result};
 
 const DEFAULT_RESULT_SIZE: usize = 10;
 
@@ -44,16 +44,20 @@ impl ApiService {
         Ok(())
     }
 
-    #[tracing::instrument(name = "Watch list of socket stream", skip(self, sender))]
-    pub async fn watch(&mut self, sender: mpsc::Sender<Book>, mut stop: oneshot::Receiver<bool>) {
+    #[tracing::instrument(name = "Watch list of socket stream", skip(self, book_sender))]
+    pub async fn watch(
+        &mut self,
+        book_sender: mpsc::Sender<(BookKind, Book)>,
+        mut stop: oneshot::Receiver<bool>,
+    ) {
         let mut fut = futures_util::stream::select_all(
             self.services.iter_mut().map(|s| s.socket.take().unwrap()),
         );
 
         loop {
             tokio::select! {
-                Some(item) = fut.next() => {
-                    tokio::spawn(Book::publish(sender.clone(), item));
+                Some(message) = fut.next() => {
+                    tokio::spawn(Book::publish(book_sender.clone(), message));
                 },
                 _ = (&mut stop) => break
 

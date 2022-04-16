@@ -1,4 +1,3 @@
-use rust_decimal::Decimal;
 use serde::Deserialize;
 
 #[non_exhaustive]
@@ -12,7 +11,7 @@ pub enum Event {
 #[derive(Debug, Deserialize)]
 pub struct EventData {
     #[serde(alias = "a")]
-    pub bids: Vec<(Decimal, Decimal)>,
+    pub bids: Vec<(String, String)>,
     #[serde(alias = "b")]
-    pub asks: Vec<(Decimal, Decimal)>,
+    pub asks: Vec<(String, String)>,
 }

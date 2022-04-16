@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package orderbook;
+
+service OrderBook {
+  rpc BookSummary(Empty) returns (stream Summary);
+}
+
+// Summary is the summary for the full book.
+message Summary {
+  string spread = 1; // should be decimal or money but set to string for convenience.
+  repeated Book bids = 2;
+  repeated Book asks = 3;
+}
+
+message Empty{}
+
+/* Book represents a book used in the summary.
+   The `amount` and `price` field should have been money or decimal
+   but are set to string for convenience.
+   Please bear with me:)
+ */
+message Book {
+  string exchange = 1;
+  string price = 2;
+  string amount = 3;
+}

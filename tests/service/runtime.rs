@@ -21,6 +21,6 @@ async fn runtime_can_publish_books() {
     let (tx, mut rx) = channel(10);
     run_until_stopped(tx, stop_rx).await;
     while let Some(b) = rx.recv().await {
-        assert!(matches!(b, Book { .. }));
+        assert!(matches!(b, (_, Book { .. })));
     }
 }

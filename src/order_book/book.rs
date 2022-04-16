@@ -4,7 +4,6 @@
 
 use std::cmp::Ordering;
 
-use anyhow::Context;
 use priority_queue::DoublePriorityQueue;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -13,22 +12,14 @@ use tokio::sync::mpsc;
 use crate::integration::event::Event;
 use crate::prelude::{Error, Exchange};
 
-/// The [`OrderBook`] type. the [See module level documentation](self).
+tonic::include_proto!("orderbook");
+
+/// The [`BookQueue`] type. the [See module level documentation](self).
 #[derive(Debug)]
-pub struct OrderBook {
+pub struct BookQueue {
     cap: usize,
     pub(super) kind: BookKind,
     pub(super) books: DoublePriorityQueue<Exchange, Book>,
-}
-
-/// The [`Book`] type represents a book in an [order book](OrderBook).
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all(serialize = "snake_case"))]
-pub struct Book {
-    price: Decimal,
-    amount: Decimal,
-    #[serde(skip_deserializing)]
-    pub(super) exchange: Option<Exchange>,
 }
 
 impl PartialOrd for Book {
@@ -37,10 +28,18 @@ impl PartialOrd for Book {
     }
 }
 
+impl Eq for Book {}
+
 impl Ord for Book {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.amount.cmp(&other.amount) {
-            Ordering::Equal => self.price.cmp(&other.price),
+        let amount: Decimal = self.amount.parse().unwrap();
+        let price: Decimal = self.price.parse().unwrap();
+
+        let rh_amount: Decimal = other.amount.parse().unwrap();
+        let rh_price: Decimal = other.price.parse().unwrap();
+
+        match amount.cmp(&rh_amount) {
+            Ordering::Equal => price.cmp(&rh_price),
             Ordering::Greater => Ordering::Less,
             Ordering::Less => Ordering::Greater,
         }
@@ -56,33 +55,19 @@ pub enum BookKind {
 }
 
 impl Book {
-    /// Creates new book with the specified price and amount.
-    pub fn new(price: Decimal, amount: Decimal) -> Self {
+    /// Creates new book with the specified price, amount and exchange.
+    pub fn new(price: &str, amount: &str, exchange: &str) -> Self {
         Book {
-            price,
-            amount,
-            exchange: None,
+            price: price.into(),
+            amount: amount.into(),
+            exchange: exchange.into(),
         }
-    }
-
-    /// Creates new book with the specified price and amount and exchange.
-    pub fn with_exchange(price: Decimal, amount: Decimal, exchange: &Exchange) -> Self {
-        Book {
-            price,
-            amount,
-            exchange: Some(exchange.clone()),
-        }
-    }
-
-    /// Set the exchange value to the specified value.
-    pub fn set_exchange(&mut self, which: Exchange) {
-        self.exchange = Some(which);
     }
 
     /// Publishes books to a channel.
-    #[tracing::instrument(name = "Publishes books to a channel", skip(sender, messages))]
+    #[tracing::instrument(name = "Publishes books to a channel", skip(book_sender, messages))]
     pub async fn publish(
-        sender: mpsc::Sender<Self>,
+        book_sender: mpsc::Sender<(BookKind, Book)>,
         messages: Result<tungstenite::Message, tungstenite::Error>,
     ) -> Result<(), Error> {
         let messages = messages?;
@@ -99,17 +84,27 @@ impl Book {
         };
 
         for (price, amount) in data.bids {
-            let book = Book::with_exchange(price, amount, &exchange);
-            sender.send(book).await.context("failed to send book")?;
+            let book = Book::new(&price, &amount, exchange.as_ref());
+            if let Err(e) = book_sender.send((BookKind::Bids, book)).await {
+                tracing::error!("failed to publish book: {}", e);
+            }
         }
+
+        for (price, amount) in data.asks {
+            let book = Book::new(&price, &amount, exchange.as_ref());
+            if let Err(e) = book_sender.send((BookKind::Asks, book)).await {
+                tracing::error!("failed to publish book: {}", e);
+            }
+        }
+
         Ok(())
     }
 }
 
-impl OrderBook {
+impl BookQueue {
     /// Creates new order book of the specified kind.
     pub fn new(kind: BookKind) -> Self {
-        OrderBook {
+        BookQueue {
             cap: 0,
             kind,
             books: DoublePriorityQueue::new(),
@@ -118,7 +113,7 @@ impl OrderBook {
 
     /// Creates new order book of the specified kind with the specified capacity.
     pub fn with_capacity(kind: BookKind, capacity: usize) -> Self {
-        OrderBook {
+        BookQueue {
             cap: capacity,
             kind,
             books: DoublePriorityQueue::with_capacity(capacity),
@@ -129,14 +124,12 @@ impl OrderBook {
     ///
     /// # Example
     ///
-    /// ```no_run
     ///
-    /// use rust_decimal_macros::dec;
     ///
     /// use orderbook::prelude::*;
     ///
-    /// let mut order_book = OrderBook::with_capacity(BookKind::Asks, 1);
-    /// let book = Book::new(dec!(2.1), dec!(0.4));
+    /// let mut order_book = BookQueue::with_capacity(BookKind::Asks, 1);
+    /// let book = Book::new("2.1", "0.4", "bitstamp");
     /// order_book.push(Exchange::Bitstamp, book);
     /// assert_eq!(order_book.len(), 1);
     /// ```
@@ -148,16 +141,13 @@ impl OrderBook {
     ///
     /// # Example
     ///
-    /// ```no_run
-    ///
-    /// use rust_decimal_macros::dec;
     ///
     /// use orderbook::prelude::*;
     ///
-    /// let mut order_book = OrderBook::with_capacity(BookKind::Bids, 1);
-    /// order_book.push(Exchange::Binance, Book::new(dec!(1.9), dec!(3.7)));
-    /// order_book.push(Exchange::Bitstamp, Book::new(dec!(2.5), dec!(4.1)));
-    /// let value = Some((Exchange::Binance, Book::new(dec!(1.9), dec!(3.7))));
+    /// let mut order_book = BookQueue::with_capacity(BookKind::Bids, 1);
+    /// order_book.push(Exchange::Binance, Book::new("1.9", "3.7', "binance"));
+    /// order_book.push(Exchange::Bitstamp, Book::new("2.5", "4.1", "bitstamp"));
+    /// let value = Some((Exchange::Binance, Book::new("1.9", "3.7", "binance")));
     /// assert_eq!(order_book.pop(), value);
     /// ```
     pub fn pop(&mut self) -> Option<(Exchange, Book)> {
@@ -184,10 +174,7 @@ impl OrderBook {
             .into_sorted_iter()
             .rev()
             .take(n)
-            .map(|(e, mut b)| {
-                b.exchange = Some(e);
-                b
-            })
+            .map(|(_, b)| b)
             .collect::<Vec<_>>()
     }
 }

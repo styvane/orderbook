@@ -28,3 +28,12 @@ impl FromStr for Exchange {
         Ok(exchange)
     }
 }
+
+impl AsRef<str> for Exchange {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Binance => "binance",
+            Self::Bitstamp => "bitstamp",
+        }
+    }
+}
