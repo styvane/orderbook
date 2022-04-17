@@ -1,35 +1,85 @@
+//! Summary service type.
+//!
+//! This module implement the summary service.
+
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use async_trait::async_trait;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
 use super::runtime::run_until_stopped;
-use crate::prelude::{Book, BookKind, BookQueue, Empty, OrderBook, Summary};
+use super::transport::StopSender;
+use crate::prelude::{Book, BookKind, BookQueue, Configuration, Empty, OrderBook, Summary};
 
-const RESULT_SIZE: usize = 10;
+pub struct SummaryService {
+    pub config: Configuration,
+}
 
-pub struct SummaryService;
+impl Default for SummaryService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SummaryService {
+    /// Creates new summary service.
+    pub fn new() -> Self {
+        let config = Configuration::new().expect("failed to get configuration");
+        Self { config }
+    }
+}
 
 #[async_trait]
 impl OrderBook for SummaryService {
-    type BookSummaryStream = ReceiverStream<Result<Summary, Status>>;
+    type BookSummaryStream = SummaryStream;
     #[tracing::instrument(name = "Book Summary", skip(self, _request))]
     async fn book_summary(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
-        let (book_tx, book_rx) = mpsc::channel(1000);
+        let (book_tx, book_rx) = mpsc::channel(self.config.result_size);
         let (stop_tx, stop_rx) = oneshot::channel();
 
-        tokio::spawn(async move {
-            run_until_stopped(book_tx, stop_rx).await;
-        });
-        let (tx, rx) = mpsc::channel(1000);
-        tokio::spawn(async move {
-            push_books(tx, book_rx, RESULT_SIZE).await;
-        });
+        let config = self.config.exchanges.clone();
+        let size = self.config.result_size;
 
-        Ok(Response::new(ReceiverStream::new(rx)))
+        tokio::spawn(async move {
+            run_until_stopped(config, book_tx, stop_rx).await;
+        });
+        let (tx, rx) = mpsc::channel(size);
+
+        tokio::spawn(async move {
+            push_books(tx, book_rx, size).await;
+        });
+        let stream = SummaryStream {
+            inner: ReceiverStream::new(rx),
+            stop_request: StopSender::new(stop_tx),
+        };
+
+        Ok(Response::new(stream))
+    }
+}
+
+pub struct SummaryStream {
+    inner: ReceiverStream<Result<Summary, Status>>,
+    stop_request: StopSender,
+}
+
+impl Drop for SummaryStream {
+    fn drop(&mut self) {
+        let _ = self.stop_request.try_stop();
+    }
+}
+
+impl Stream for SummaryStream {
+    type Item = Result<Summary, Status>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.inner).poll_next(cx)
     }
 }
 
@@ -59,7 +109,7 @@ async fn push_books(
 
         if let Err(e) = summary
             .send(Ok(Summary {
-                spread: spread.to_string(),
+                spread: spread.abs().to_string(),
                 asks: ask_book.take(size),
                 bids: bid_book.take(size),
             }))

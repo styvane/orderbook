@@ -1,5 +1,5 @@
 use orderbook::prelude::runtime::run_until_stopped;
-use orderbook::prelude::Book;
+use orderbook::prelude::{Book, Configuration};
 use tokio::sync::{mpsc::channel, oneshot};
 use tokio::time::{self, Duration};
 
@@ -19,7 +19,8 @@ async fn runtime_can_publish_books() {
     });
 
     let (tx, mut rx) = channel(10);
-    run_until_stopped(tx, stop_rx).await;
+    let config = Configuration::new().expect("failed to retrieve configuration");
+    run_until_stopped(config.exchanges, tx, stop_rx).await;
     while let Some(b) = rx.recv().await {
         assert!(matches!(b, (_, Book { .. })));
     }

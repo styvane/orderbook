@@ -3,7 +3,7 @@ use tonic::Request;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = OrderBookClient::connect("http://[::1]:10000").await?;
+    let mut client = OrderBookClient::connect("http://[::1]:12000").await?;
 
     let mut stream = client
         .book_summary(Request::new(Empty {}))

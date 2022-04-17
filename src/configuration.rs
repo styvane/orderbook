@@ -17,6 +17,13 @@ use crate::prelude::Error;
 pub struct Configuration {
     pub result_size: usize,
     pub exchanges: Vec<ExchangeConfig>,
+    pub server: Server,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Server {
+    pub hostname: String,
+    pub port: u16,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -95,5 +102,9 @@ impl Configuration {
             .map_err(Error::ConfigError)?;
 
         Ok(config)
+    }
+    /// Returns server address.
+    pub fn server_addr(&self) -> String {
+        format!("{}:{}", self.server.hostname, self.server.port)
     }
 }
