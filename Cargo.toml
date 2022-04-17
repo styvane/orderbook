@@ -2,7 +2,6 @@
 name = "orderbook"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.56"
 authors = ["styvane <styvane@acm.org>"]
 license = "Do What The F*ck You Want To Public License"
 
@@ -31,7 +30,7 @@ tracing-subscriber = { version = "0.3.11", features = ["env-filter", "registry"]
 tracing-bunyan-formatter = "0.3.2"
 secrecy = { version = "0.8.0", features = ["serde"] }
 config = { version = "0.13.1", features = ["toml", "yaml"] }
-tonic = "0.7.1"
+tonic = "0.7"
 prost = "0.10.1"
 tokio-stream = "0.1.8"
 once_cell = "1.10.0"
