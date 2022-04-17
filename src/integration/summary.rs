@@ -4,29 +4,31 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 use super::runtime::run_until_stopped;
-use crate::prelude::order_book_server::OrderBook;
-use crate::prelude::{Book, BookKind, BookQueue, Empty, Summary};
+use crate::prelude::{Book, BookKind, BookQueue, Empty, OrderBook, Summary};
 
 const RESULT_SIZE: usize = 10;
 
-pub struct SummaryServer;
+pub struct SummaryService;
 
 #[async_trait]
-impl OrderBook for SummaryServer {
+impl OrderBook for SummaryService {
     type BookSummaryStream = ReceiverStream<Result<Summary, Status>>;
+    #[tracing::instrument(name = "Book Summary", skip(self, _request))]
     async fn book_summary(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
-        let (book_tx, book_rx) = mpsc::channel(3);
-        let (tx, rx) = mpsc::channel(3);
-        let (_stop_tx, stop_rx) = oneshot::channel();
+        let (book_tx, book_rx) = mpsc::channel(1000);
+        let (stop_tx, stop_rx) = oneshot::channel();
+
         tokio::spawn(async move {
             run_until_stopped(book_tx, stop_rx).await;
         });
+        let (tx, rx) = mpsc::channel(1000);
         tokio::spawn(async move {
             push_books(tx, book_rx, RESULT_SIZE).await;
         });
+
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
@@ -37,11 +39,17 @@ async fn push_books(
     mut books: mpsc::Receiver<(BookKind, Book)>,
     size: usize,
 ) {
-    let mut bid_book = BookQueue::with_capacity(BookKind::Bids, 3);
-    let mut ask_book = BookQueue::with_capacity(BookKind::Asks, 3);
+    let mut bid_book = BookQueue::with_capacity(BookKind::Bids, size);
+    let mut ask_book = BookQueue::with_capacity(BookKind::Asks, size);
 
     while let Some((kind, book)) = books.recv().await {
         let exchange = book.exchange.parse().unwrap();
+        tracing::info!(
+            "received book '{}' book {:?} from exchange: {}'",
+            kind.as_ref(),
+            book,
+            book.exchange,
+        );
         match kind {
             BookKind::Asks => ask_book.push(exchange, book),
             BookKind::Bids => bid_book.push(exchange, book),

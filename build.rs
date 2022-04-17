@@ -4,7 +4,6 @@ fn main() {
             "orderbook.Book",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
-        .build_client(false)
         .compile(&["proto/orderbook.proto"], &["proto"])
         .unwrap_or_else(|e| panic!("failed to compile protos {e:?}"));
 }

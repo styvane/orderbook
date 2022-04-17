@@ -54,6 +54,15 @@ pub enum BookKind {
     Bids,
 }
 
+impl AsRef<str> for BookKind {
+    fn as_ref(&self) -> &str {
+        match self {
+            BookKind::Asks => "ASKS",
+            BookKind::Bids => "BIDS",
+        }
+    }
+}
+
 impl Book {
     /// Creates new book with the specified price, amount and exchange.
     pub fn new(price: &str, amount: &str, exchange: &str) -> Self {
@@ -70,17 +79,22 @@ impl Book {
         book_sender: mpsc::Sender<(BookKind, Book)>,
         messages: Result<tungstenite::Message, tungstenite::Error>,
     ) -> Result<(), Error> {
-        let messages = messages?;
+        let messages = messages.unwrap();
         let exchange: Exchange;
-        let EventData { bids, asks } = match serde_json::from_str::<Event>(&messages.into_text()?)?
+        let EventData { bids, asks } = match serde_json::from_str::<Event>(&messages.into_text()?)
+            .map_err(Error::ParseError)
         {
-            Event::Binance(event) => {
+            Ok(Event::Binance(event)) => {
                 exchange = Exchange::Binance;
                 event
             }
-            Event::Bitstamp { data } => {
+            Ok(Event::Bitstamp { data }) => {
                 exchange = Exchange::Bitstamp;
                 data
+            }
+            Err(e) => {
+                tracing::error!("failed to parse message: {}", e);
+                return Err(e);
             }
         };
 
@@ -191,7 +205,7 @@ impl BookQueue {
         self.books
             .peek_max()
             .map(|(_, b)| b.price.parse::<Decimal>().unwrap_or_default())
-            .unwrap()
+            .unwrap_or_default()
     }
 }
 

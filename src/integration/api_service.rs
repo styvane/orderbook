@@ -54,15 +54,19 @@ impl ApiService {
             self.services.iter_mut().map(|s| s.socket.take().unwrap()),
         );
 
-        loop {
-            tokio::select! {
-                Some(message) = fut.next() => {
-                    tokio::spawn(Book::publish(book_sender.clone(), message));
+        // loop {
+        //     tokio::select! {
+        //         Some(message) = fut.next() => {
+        //             tracing::info!("{:?}", message);
+        //             tokio::spawn(Book::publish(book_sender.clone(), message));
 
-                },
-                _ = (&mut stop) => break
+        //         },
+        //         _ = (&mut stop) => break,
+        //     }
+        // }
 
-            }
+        while let Some(message) = fut.next().await {
+            tokio::spawn(Book::publish(book_sender.clone(), message));
         }
     }
 }
