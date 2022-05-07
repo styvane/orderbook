@@ -1,14 +1,9 @@
 ---
-source: orderbook/src/order_book/ser.rs
+source: src/order_book/ser.rs
 expression: "&order_book"
 ---
 {
   "asks": [
-    {
-      "exchange": "binance",
-      "price": "3.1",
-      "amount": "0.1"
-    },
     {
       "exchange": "bitstamp",
       "price": "2.1",

@@ -38,8 +38,8 @@ impl Ord for Book {
         let rh_amount: Decimal = other.amount.parse().unwrap();
         let rh_price: Decimal = other.price.parse().unwrap();
 
-        match amount.cmp(&rh_amount) {
-            Ordering::Equal => price.cmp(&rh_price),
+        match price.cmp(&rh_price) {
+            Ordering::Equal => amount.cmp(&rh_amount),
             Ordering::Greater => Ordering::Less,
             Ordering::Less => Ordering::Greater,
         }
@@ -97,7 +97,6 @@ impl Book {
                 return Err(e);
             }
         };
-
         let bid_sender = book_sender.clone();
         let bid_exchange = exchange.clone();
 
@@ -157,6 +156,7 @@ impl BookQueue {
     /// ```
     pub fn push(&mut self, exchange: Exchange, book: Book) {
         self.books.push(exchange, book);
+        self.pop();
     }
 
     /// Removes the minimum book from the order book.

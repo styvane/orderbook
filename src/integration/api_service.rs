@@ -14,22 +14,20 @@ use super::transport::{StopSender, WebSocketStream};
 use crate::configuration::ExchangeConfig;
 use crate::prelude::{Book, BookKind, Error, Exchange, Result};
 
-const DEFAULT_RESULT_SIZE: usize = 10;
-
 pub struct ApiService {
-    pub result_size: usize,
+    pub capacity: usize,
     pub(crate) services: Vec<ExchangeService>,
     pub send_on_stop: HashMap<String, StopSender>,
 }
 
 impl ApiService {
     /// Creates new [`ApiService`].
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            result_size: DEFAULT_RESULT_SIZE,
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
             services: vec![],
             send_on_stop: HashMap::new(),
-        })
+        }
     }
 
     /// Opens a connection to an exchange.
@@ -57,17 +55,11 @@ impl ApiService {
         loop {
             tokio::select! {
                 Some(message) = fut.next() => {
-                    tracing::info!("{:?}", message);
                     tokio::spawn(Book::publish(book_sender.clone(), message));
-
                 },
                 _ = (&mut stop) => break,
             }
         }
-
-        // while let Some(message) = fut.next().await {
-        //     tokio::spawn(Book::publish(book_sender.clone(), message));
-        // }
     }
 }
 

@@ -7,19 +7,14 @@ use super::transport::WebSocketTransport;
 use crate::configuration::ExchangeConfig;
 use crate::prelude::{Book, BookKind};
 
-#[tracing::instrument(name = "Run until stopped", skip(book_sender, stop_publisher))]
+#[tracing::instrument(name = "Run until stopped", skip(book_sender, stop_publisher, config))]
 pub async fn run_until_stopped(
+    capacity: usize,
     config: Vec<ExchangeConfig>,
     book_sender: mpsc::Sender<(BookKind, Book)>,
     stop_publisher: oneshot::Receiver<bool>,
 ) {
-    let mut api = match ApiService::new() {
-        Ok(api) => api,
-        Err(e) => {
-            tracing::error!("failed to create api {}", e);
-            process::exit(1);
-        }
-    };
+    let mut api = ApiService::new(capacity);
 
     for val in &config {
         if let Err(e) = api.connect(val).await {

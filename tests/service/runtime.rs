@@ -20,7 +20,7 @@ async fn runtime_can_publish_books() {
 
     let (tx, mut rx) = channel(10);
     let config = Configuration::new().expect("failed to retrieve configuration");
-    run_until_stopped(config.exchanges, tx, stop_rx).await;
+    run_until_stopped(10, config.exchanges, tx, stop_rx).await;
     while let Some(b) = rx.recv().await {
         assert!(matches!(b, (_, Book { .. })));
     }

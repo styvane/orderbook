@@ -48,12 +48,12 @@ impl OrderBook for SummaryService {
         let size = self.config.result_size;
 
         tokio::spawn(async move {
-            run_until_stopped(config, book_tx, stop_rx).await;
+            run_until_stopped(size, config, book_tx, stop_rx).await;
         });
         let (tx, rx) = mpsc::channel(size);
 
         tokio::spawn(async move {
-            push_books(tx, book_rx, size).await;
+            stream_books(tx, book_rx, size).await;
         });
         let stream = SummaryStream {
             inner: ReceiverStream::new(rx),
@@ -83,8 +83,8 @@ impl Stream for SummaryStream {
     }
 }
 
-#[tracing::instrument(name = "Pushes book to the queue", skip(summary, books, size))]
-async fn push_books(
+#[tracing::instrument(name = "Streams book", skip(summary, books, size))]
+async fn stream_books(
     summary: mpsc::Sender<Result<Summary, Status>>,
     mut books: mpsc::Receiver<(BookKind, Book)>,
     size: usize,
@@ -93,13 +93,14 @@ async fn push_books(
     let mut ask_book = BookQueue::with_capacity(BookKind::Asks, size);
 
     while let Some((kind, book)) = books.recv().await {
-        let exchange = book.exchange.parse().unwrap();
         tracing::info!(
             "received book '{}' book {:?} from exchange: {}'",
             kind.as_ref(),
             book,
             book.exchange,
         );
+        let exchange = book.exchange.parse().unwrap();
+
         match kind {
             BookKind::Asks => ask_book.push(exchange, book),
             BookKind::Bids => bid_book.push(exchange, book),

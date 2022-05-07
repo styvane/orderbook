@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package orderbook;
 
+
 service OrderBook {
   rpc BookSummary(Empty) returns (stream Summary);
 }
@@ -25,3 +26,4 @@ message Book {
   string price = 2;
   string amount = 3;
 }
+

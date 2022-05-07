@@ -8,13 +8,12 @@ Requirements
 ------------
 The only requirement for this is Rust.
 
-Additional you can install [bunyan-rs](https://crates.io/crates/bunyan)
+Additional you can install [bunyan-rs](https://crates.io/crates/bunyan) to better visualize the logs.
 
 Run
 ---
 
 To run this, we need a configuration see [settings](settings). However the default configuration should be enough.
-To better visualize the logs.
 
 Run the following command in two different terminals.
 
