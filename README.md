@@ -33,9 +33,3 @@ Note that you don't have the run the `orderbook-client` any GRPC client should w
 ```bash
 $ grpcurl -vv -plaintext -import-path ./proto -proto orderbook.proto -d '{}' [::1]:12000 orderbook.OrderBook/BookSummary
 ```
-
-
-
-Stats
------
-![Alt](https://repobeats.axiom.co/api/embed/26b0d356ff075d38906976ee7182b1ff86587efe.svg "Repobeats analytics image")
